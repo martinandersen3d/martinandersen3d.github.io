@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HTML Extractor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    textarea {
+      white-space: pre;
+      overflow-x: auto;
+      font-size: 1.2rem;
+    }
+    .btn-lg {
+      padding: 15px;
+      font-size: 1.3rem;
+      width: 100%;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div id="app" class="container my-4">
+    <h1 class="text-center mb-4">HTML Extractor</h1>
+
+    <div class="row">
+      <!-- Left Side: Attribute Selection & Original Content -->
+      <div class="col-md-6">
+        <div class="card mb-3">
+          <div class="card-header">Extract Options</div>
+          <div class="card-body">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" v-model="extractTextBetweenTags" id="textBetweenTags">
+              <label class="form-check-label" for="textBetweenTags">Text between brackets</label>
+            </div>
+            <div class="form-check" v-for="attr in availableAttributes" :key="attr">
+              <input class="form-check-input" type="checkbox" v-model="selectedAttributes" :value="attr" :id="attr">
+              <label class="form-check-label" :for="attr">{{ attr }}</label>
+            </div>
+          </div>
+        </div>
+
+        <label class="form-label">Original Content:</label>
+        <textarea v-model="inputText" class="form-control mb-3" rows="10"></textarea>
+        <button @click="pasteInput" class="btn btn-success btn-lg">📋 Paste Input</button>
+      </div>
+
+      <!-- Right Side: Settings & Output -->
+      <div class="col-md-6">
+        <div class="card mb-3">
+          <div class="card-header">Definition Settings</div>
+          <div class="card-body">
+            <label class="form-label">Definition Prefix:</label>
+            <input type="text" v-model="definitionPrefix" class="form-control mb-3" placeholder="{{">
+
+            <label class="form-label">Definition Suffix:</label>
+            <input type="text" v-model="definitionSuffix" class="form-control mb-3" placeholder="}}">
+
+            <label class="form-label">Line Ending:</label>
+            <input type="text" v-model="definitionLineEnding" class="form-control" placeholder="; or ''">
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-header">Variable Settings</div>
+          <div class="card-body">
+            <label class="form-label">HTML Variable Prefix:</label>
+            <input type="text" v-model="variablePrefix" class="form-control mb-3" placeholder="{{">
+            
+            <label class="form-label">HTML Variable Suffix:</label>
+            <input type="text" v-model="variableSuffix" class="form-control" placeholder="}}">
+          </div>
+        </div>
+
+        <label class="form-label">Output (Definitions + HTML):</label>
+        <textarea :value="extractedText" readonly class="form-control mb-3" rows="10"></textarea>
+        <button @click="copyOutput" class="btn btn-primary btn-lg">📋 Copy Output</button>
+        <p v-if="copiedMessage" class="text-success mt-2">{{ copiedMessage }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vue and Bootstrap Bundle -->
+  <script src="https://unpkg.com/vue@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    Vue.createApp({
+      data() {
+        return {
+          inputText: `<div>
+  some text here
+  <a href="https://example.com" title="Example Title">Example</a>
+  <img src="https://example.com/image.jpg" />
+  <input type="text" id="username" name="user" placeholder="Enter your name" value="John">
+</div>`,
+          variablePrefix: '{{',
+          variableSuffix: '}}',
+          definitionPrefix: '{{',
+          definitionSuffix: '}}',
+          definitionLineEnding: '',
+          extractTextBetweenTags: true,
+          availableAttributes: [
+            "href", "id", "max", "maxlength", "min", "minlength", 
+            "name", "placeholder", "src", "title", "value"
+          ],
+          selectedAttributes: ["href", "src"],
+          copiedMessage: ''
+        };
+      },
+      computed: {
+        extractedText() {
+          try {
+            let attrCounters = {};
+            let variableDefinitions = [];
+
+            const htmlPrefix = this.variablePrefix || '';
+            const htmlSuffix = this.variableSuffix || '';
+            const defPrefix = this.definitionPrefix || '';
+            const defSuffix = this.definitionSuffix || '';
+            const defLineEnding = this.definitionLineEnding || '';
+
+            const container = document.createElement('div');
+            container.innerHTML = this.inputText;
+
+            function generateVarName(type) {
+              if (!attrCounters[type]) attrCounters[type] = 1;
+              let varName = type + String(attrCounters[type]).padStart(2, '0');
+              attrCounters[type]++;
+              return varName;
+            }
+
+            function traverse(node) {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                for (let attr of Object.keys(node.attributes)) {
+                  let attrName = node.attributes[attr].name;
+                  let attrValue = node.attributes[attr].value;
+                  
+                  if (this.selectedAttributes.includes(attrName) && attrValue.trim() !== '') {
+                    let varName = generateVarName(attrName);
+                    let fullHtmlVar = htmlPrefix + varName + htmlSuffix;
+                    variableDefinitions.push(`${defPrefix}${varName}${defSuffix} = "${attrValue.trim()}"${defLineEnding}`);
+                    node.setAttribute(attrName, fullHtmlVar);
+                  }
+                }
+              }
+
+              if (this.extractTextBetweenTags && node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() !== '') {
+                let varName = generateVarName('text');
+                let fullHtmlVar = htmlPrefix + varName + htmlSuffix;
+                variableDefinitions.push(`${defPrefix}${varName}${defSuffix} = "${node.nodeValue.trim()}"${defLineEnding}`);
+                node.nodeValue = fullHtmlVar;
+              }
+
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                Array.from(node.childNodes).forEach(child => traverse.call(this, child));
+              }
+            }
+
+            traverse.call(this, container);
+            let outputHtml = container.innerHTML;
+            return variableDefinitions.join('\n') + '\n\n' + outputHtml;
+          } catch (e) {
+            console.error('Error extracting attributes:', e);
+            return 'Error extracting attributes';
+          }
+        }
+      },
+      methods: {
+        copyOutput() {
+          navigator.clipboard.writeText(this.extractedText).then(() => {
+            this.copiedMessage = 'Copied to Clipboard';
+            setTimeout(() => {
+              this.copiedMessage = '';
+            }, 2000); // Hide after 2 seconds
+          }).catch(err => {
+            console.error('Error copying text: ', err);
+          });
+        },
+        pasteInput() {
+          navigator.clipboard.readText().then(text => {
+            this.inputText = text;
+          }).catch(err => {
+            console.error('Error pasting text: ', err);
+          });
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HTML Extractor</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    textarea {
+      white-space: pre;
+      overflow-x: auto;
+      font-size: 1.2rem;
+      font-family: monospace;
+    }
+    .btn-lg {
+      padding: 15px;
+      font-size: 1.3rem;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div id="app" class="container my-4">
+    <h1 class="text-center mb-4">HTML Extractor</h1>
+    
+    <div class="row">
+      <!-- Left Side: Original Content and Extract Options -->
+      <div class="col-md-6">
+        <label class="form-label fw-bold">Original Content:</label>
+        <textarea v-model="inputText" class="form-control mb-3" rows="10"></textarea>
+        <button @click="pasteInput" class="btn btn-success btn-lg">📋 Paste Input</button>
+        <div class="card mb-3">
+          <div class="card-header">Extract Options</div>
+          <div class="card-body">
+            <!-- Standard attribute checkboxes -->
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" v-model="extractTextBetweenTags" id="textBetweenTags">
+              <label class="form-check-label" for="textBetweenTags">Text between brackets</label>
+            </div>
+            <div class="form-check" v-for="attr in availableAttributes" :key="attr">
+              <input class="form-check-input" type="checkbox" v-model="selectedAttributes" :value="attr" :id="attr">
+              <label class="form-check-label" :for="attr">{{ attr }}</label>
+            </div>
+            <!-- Custom attribute inputs -->
+            <hr>
+            <div class="mb-2">
+              <label class="form-label">Custom Attribute 1:</label>
+              <div class="input-group">
+                <div class="input-group-text">
+                  <input type="checkbox" v-model="customAttributesEnabled[0]">
+                </div>
+                <input type="text" class="form-control" v-model="customAttributes[0]" placeholder="Enter attribute name">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Custom Attribute 2:</label>
+              <div class="input-group">
+                <div class="input-group-text">
+                  <input type="checkbox" v-model="customAttributesEnabled[1]">
+                </div>
+                <input type="text" class="form-control" v-model="customAttributes[1]" placeholder="Enter attribute name">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Custom Attribute 3:</label>
+              <div class="input-group">
+                <div class="input-group-text">
+                  <input type="checkbox" v-model="customAttributesEnabled[2]">
+                </div>
+                <input type="text" class="form-control" v-model="customAttributes[2]" placeholder="Enter attribute name">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right Side: Output and Settings -->
+      <div class="col-md-6">
+        <label class="form-label fw-bold">Output (Definitions + HTML):</label>
+        <textarea :value="extractedText" readonly class="form-control mb-3" rows="10"></textarea>
+        <button @click="copyOutput" class="btn btn-primary btn-lg">📋 Copy Output</button>
+        <p v-if="copiedMessage" class="text-success mt-2">{{ copiedMessage }}</p>
+        
+        <div class="card mb-3">
+          <div class="card-header">Definition Settings</div>
+          <div class="card-body">
+            <label class="form-label">Definition Prefix:</label>
+            <input type="text" v-model="definitionPrefix" class="form-control mb-3" placeholder="{{">
+            <label class="form-label">Definition Suffix:</label>
+            <input type="text" v-model="definitionSuffix" class="form-control mb-3" placeholder="}}">
+            <label class="form-label">Line Ending:</label>
+            <input type="text" v-model="definitionLineEnding" class="form-control mb-3" placeholder="; or ''">
+            <label class="form-label">Sort Order:</label>
+            <select v-model="sortOrder" class="form-select">
+              <option value="dom">DOM Order</option>
+              <option value="type">By Type</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="card mb-3">
+          <div class="card-header">Variable Settings</div>
+          <div class="card-body">
+            <label class="form-label">HTML Variable Prefix:</label>
+            <input type="text" v-model="variablePrefix" class="form-control mb-3" placeholder="{{">
+            <label class="form-label">HTML Variable Suffix:</label>
+            <input type="text" v-model="variableSuffix" class="form-control" placeholder="}}">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Vue and Bootstrap Bundle -->
+  <script src="https://unpkg.com/vue@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    Vue.createApp({
+      data() {
+        return {
+          inputText: `<div>
+  some text here
+  <a href="https://example.com" title="Example Title">Example</a>
+  <img src="https://example.com/image.jpg" />
+  <input type="text" id="username" name="user" placeholder="Enter your name" value="John">
+</div>`,
+          variablePrefix: '{{',
+          variableSuffix: '}}',
+          definitionPrefix: '{{',
+          definitionSuffix: '}}',
+          definitionLineEnding: '',
+          extractTextBetweenTags: true,
+          // Standard available attributes (for checkboxes)
+          availableAttributes: [
+            "href", "id", "max", "maxlength", "min", "minlength", 
+            "name", "placeholder", "src", "title", "value"
+          ],
+          // Standard selected attributes (checkboxes)
+          selectedAttributes: ["href", "src"],
+          // Custom attribute text fields and corresponding enabled flags
+          customAttributes: ["", "", ""],
+          customAttributesEnabled: [false, false, false],
+          sortOrder: "dom",
+          copiedMessage: ''
+        };
+      },
+      computed: {
+        // Combine standard selected attributes with custom ones (if enabled and non-empty).
+        effectiveAttributes() {
+          let effective = this.selectedAttributes.slice();
+          for (let i = 0; i < 3; i++) {
+            if (this.customAttributesEnabled[i] && this.customAttributes[i].trim() !== '') {
+              effective.push(this.customAttributes[i].trim());
+            }
+          }
+          return effective;
+        },
+        extractedText() {
+          try {
+            let attrCounters = {};
+            let variableDefinitions = [];
+            let definitionCounter = 0; // Order counter
+
+            const htmlPrefix = this.variablePrefix || '';
+            const htmlSuffix = this.variableSuffix || '';
+            const defPrefix = this.definitionPrefix || '';
+            const defSuffix = this.definitionSuffix || '';
+            const defLineEnding = this.definitionLineEnding || '';
+
+            const container = document.createElement('div');
+            container.innerHTML = this.inputText;
+
+            // Function to generate a variable name for a given type.
+            const generateVarName = (type) => {
+              if (!attrCounters[type]) attrCounters[type] = 1;
+              let varName = type + String(attrCounters[type]).padStart(2, '0');
+              attrCounters[type]++;
+              return varName;
+            };
+
+            function traverse(node) {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                // Process each attribute of the element.
+                for (let i = 0; i < node.attributes.length; i++) {
+                  let attribute = node.attributes[i];
+                  let attrName = attribute.name;
+                  let attrValue = attribute.value;
+                  // Use effectiveAttributes (combined standard + custom) for extraction.
+                  if (this.effectiveAttributes.includes(attrName) && attrValue.trim() !== '') {
+                    let varName = generateVarName(attrName);
+                    let fullHtmlVar = htmlPrefix + varName + htmlSuffix;
+                    variableDefinitions.push({
+                      type: attrName,
+                      order: definitionCounter++,
+                      def: `${defPrefix}${varName}${defSuffix} = "${attrValue.trim()}"${defLineEnding}`
+                    });
+                    node.setAttribute(attrName, fullHtmlVar);
+                  }
+                }
+              }
+
+              // Process text nodes if extraction is enabled.
+              if (this.extractTextBetweenTags && node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() !== '') {
+                let varName = generateVarName('text');
+                let fullHtmlVar = htmlPrefix + varName + htmlSuffix;
+                variableDefinitions.push({
+                  type: 'text',
+                  order: definitionCounter++,
+                  def: `${defPrefix}${varName}${defSuffix} = "${node.nodeValue.trim()}"${defLineEnding}`
+                });
+                node.nodeValue = fullHtmlVar;
+              }
+
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                Array.from(node.childNodes).forEach(child => traverse.call(this, child));
+              }
+            }
+
+            traverse.call(this, container);
+            let outputHtml = container.innerHTML;
+
+            // Sort definitions based on the chosen sort order.
+            let sortedDefinitions;
+            if (this.sortOrder === 'type') {
+              // Sort by type alphabetically, then by original order.
+              sortedDefinitions = variableDefinitions.sort((a, b) => {
+                if (a.type < b.type) return -1;
+                if (a.type > b.type) return 1;
+                return a.order - b.order;
+              });
+            } else {
+              // DOM order.
+              sortedDefinitions = variableDefinitions.sort((a, b) => a.order - b.order);
+            }
+
+            const definitionsStr = sortedDefinitions.map(item => item.def).join('\n');
+            return definitionsStr + '\n\n' + outputHtml;
+          } catch (e) {
+            console.error('Error extracting attributes:', e);
+            return 'Error extracting attributes';
+          }
+        }
+      },
+      methods: {
+        copyOutput() {
+          navigator.clipboard.writeText(this.extractedText).then(() => {
+            this.copiedMessage = 'Copied to Clipboard';
+            setTimeout(() => {
+              this.copiedMessage = '';
+            }, 2000);
+          }).catch(err => {
+            console.error('Error copying text: ', err);
+          });
+        },
+        pasteInput() {
+          navigator.clipboard.readText().then(text => {
+            this.inputText = text;
+          }).catch(err => {
+            console.error('Error pasting text: ', err);
+          });
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
