@@ -1,0 +1,170 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vue 3 Stock Selector with Comments</title>
+  <script src="https://unpkg.com/vue@3"></script>
+  <style>
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #aaa;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    a {
+      color: blue;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    button {
+      padding: 5px 10px;
+    }
+    button.open-all {
+      margin-top: 20px;
+      padding: 10px;
+    }
+    .popup-note {
+      color: red;
+      font-size: small;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container">
+    <h2>Stock-selector</h2>
+    <!-- Multi-line Textbox -->
+    <textarea rows="15" v-model="textInput" placeholder="Paste ticker symbols here"></textarea>
+
+    <!-- Table with Links, Copy Button, and Comments -->
+    <table v-if="tickers.length">
+      <thead>
+        <tr>
+          <th>Copy</th>
+          <th>Ticker</th>
+          <th>Analysis</th>
+          <th>Chart</th>
+          <th>Comments</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="ticker in tickers" :key="ticker">
+          <td>
+            <button @click="copyTicker(ticker)">Copy</button>
+          </td>
+          <td>{{ ticker }}</td>
+          <td>
+            <a :href="`https://finance.yahoo.com/quote/${ticker}/analysis/`" target="_blank">
+              Analysis
+            </a>
+          </td>
+          <td>
+            <a :href="`https://finance.yahoo.com/chart/${ticker}`" target="_blank">
+              Chart
+            </a>
+          </td>
+          <td>
+            <textarea rows="3" 
+              v-model="comments[ticker]" 
+              @blur="saveComment(ticker)" 
+              placeholder="Add comment..."></textarea>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Button to Open All Links -->
+    <button class="open-all" v-if="tickers.length" @click="openAllLinks">
+      Open All Links in New Tabs
+    </button>
+    <!-- Red small text below the button -->
+    <p class="popup-note" v-if="tickers.length">
+      Allow popups in browser
+    </p>
+  </div>
+
+  <script>
+    const { createApp, ref, watch } = Vue;
+
+    createApp({
+      setup() {
+        const textInput = ref("");
+        const tickers = ref([]);
+        const comments = ref({});
+
+        if (localStorage.getItem("app-textarea") != null) {
+          textInput.value = localStorage.getItem("app-textarea")
+        }
+
+        // Watch for changes in the text input to update tickers list.
+        watch(textInput, (newVal) => {
+          textInput.value = localStorage.setItem("app-textarea", newVal)
+
+          tickers.value = newVal
+            .split(/[\n,]+/)
+            .flatMap(line => line.split(/\s+/))
+            .map(ticker => ticker.trim())
+            .filter(ticker => ticker !== "");
+            
+
+          // For each ticker, load its comment from localStorage if not already loaded.
+          tickers.value.forEach(ticker => {
+            if (!(ticker in comments.value)) {
+              comments.value[ticker] = localStorage.getItem(`comment_${ticker}`) || "";
+            }
+          });
+        }, { immediate: true });
+
+        // Copy the ticker symbol to the clipboard
+        const copyTicker = (ticker) => {
+          navigator.clipboard.writeText(ticker)
+            .then(() => console.log(`Copied: ${ticker}`))
+            .catch(err => console.error('Failed to copy!', err));
+        };
+
+        // Save the comment for a ticker to localStorage on blur.
+        const saveComment = (ticker) => {
+          localStorage.setItem(`comment_${ticker}`, comments.value[ticker]);
+          console.log(`Saved comment for ${ticker}`);
+        };
+
+        // Open both the analysis and chart links for all tickers in new tabs.
+        const openAllLinks = () => {
+          tickers.value.forEach(ticker => {
+            window.open(`https://finance.yahoo.com/quote/${ticker}/analysis/`, '_blank');
+            window.open(`https://finance.yahoo.com/chart/${ticker}`, '_blank');
+          });
+        };
+
+        return {
+          textInput,
+          tickers,
+          comments,
+          copyTicker,
+          saveComment,
+          openAllLinks
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
