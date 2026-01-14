@@ -1212,14 +1212,19 @@
       }
       a {
         color: rgb(202, 202, 202);
-        transition: background-color 0.22s ease;
         text-decoration: dotted;
         display: block;
+        padding: 0px 0px;
+        transition: padding 0.25s ease;
         
       }
-      a:hover {
-        background-color: rgba(255,255,255,0.25) !important;
+      a:hover, a:focus  {
+        background-color: rgba(0,0,0,0.9) !important;
         border-radius: 4px;
+        outline: 2px solid white;
+        font-weight: 600;
+        padding: 4px 0px;
+
       }
       input {
         color: black !important;
