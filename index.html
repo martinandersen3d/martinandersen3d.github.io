@@ -1190,19 +1190,39 @@
     <style>
       body {
         padding: 24px;
-        background-color: #eee;
+        background-color: rgb(32, 32, 32)
       }
       .card {
-        background-color: #fff;
+        background-color: rgb(50, 50, 50);
+        color: rgb(202, 202, 202);
         border: none;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.25);
       }
       /* Custom CSS grid for groups */
       .grid-container {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 16px;
+      }
+      a {
+        color: rgb(202, 202, 202);
+        transition: background-color 0.22s ease;
+        text-decoration: dotted;
+        display: block;
+        
+      }
+      a:hover {
+        background-color: rgba(255,255,255,0.25) !important;
+        border-radius: 4px;
+      }
+      input {
+        color: black !important;
+        background-color: #e6e6e6 !important;
+
+      }
+      .helptext{
+        color: rgb(202, 202, 202) !important;
       }
     </style>
   </head>
@@ -1219,10 +1239,10 @@
           type="text"
           class="form-control form-control-lg"
           v-model="searchQuery"
-          placeholder="Search links..."
+          placeholder=" 🔍  Search links..."
           tabindex="0"
         >
-        <div class="text-muted small mt-2 ms-2">Press "/" to focus</div>
+        <div class="text-muted small mt-2 ms-2 helptext">Press "/" to focus</div>
       </div>
       <!-- Groups in a 4-column CSS grid -->
       <div class="grid-container">
